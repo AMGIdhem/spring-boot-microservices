@@ -63,3 +63,55 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 git clone https://github.com/amgidhem/spring-boot-microservices.git
 cd spring-boot-microservices
 ```
+
+## Service Details
+
+### Product Service
+- **Base URL:** `http://localhost:8080/api/product`
+- Provides CRUD operations for products.
+
+### Order Service
+- **Base URL:** `http://localhost:8081/api/order`
+- Manages orders and order status.
+
+### Inventory Service
+- **Base URL:** `http://localhost:8082/api/inventory`
+- Tracks stock levels for products.
+
+### API Gateway
+- **Base URL:** `http://localhost:9000`
+- Routes requests to the respective services.
+
+---
+
+## API Gateway Routes
+
+| Route         | Target Service    |
+|---------------|-----------------|
+| `/api/product/**`  | Product Service  |
+| `/api/order/**`    | Order Service    |
+| `/api/inventory/**` | Inventory Service|
+
+---
+
+## Running the Services
+
+### Using Maven
+
+```bash
+# Product Service
+cd product-service
+./mvnw spring-boot:run
+
+# Order Service
+cd ../order-service
+./mvnw spring-boot:run
+
+# Inventory Service
+cd ../inventory-service
+./mvnw spring-boot:run
+
+# API Gateway
+cd ../api-gateway
+./mvnw spring-boot:run
+```
