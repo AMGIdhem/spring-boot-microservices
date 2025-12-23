@@ -17,18 +17,53 @@ import static org.springframework.cloud.gateway.server.mvc.handler.HandlerFuncti
 public class Routes {
 
     @Bean
-    public RouterFunction<ServerResponse> customRoutes() {
+    public RouterFunction<ServerResponse> productServiceRoute() {
         return route("product_service")
                 .route(path("/api/product/**"), http())
                 .before(uri("http://localhost:8080"))
-                .build()
-                .and(route("order_service")
-                        .route(path("/api/order/**"), http())
-                        .before(uri("http://localhost:8081"))
-                        .build()
-                        .and(route("inventory_service")
-                                .route(path("/api/inventory/**"), http())
-                                .before(uri("http://localhost:8082"))
-                                .build()));
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> productServiceSwaggerRoute() {
+        return route("product_service_swagger")
+                .route(path("/aggregate/product-service/v3/api-docs"), http())
+                .before(uri("http://localhost:8080"))
+                .before(setPath("/api-docs"))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> orderServiceRoute() {
+        return route("order_service")
+                .route(path("/api/order/**"), http())
+                .before(uri("http://localhost:8081"))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> orderServiceSwaggerRoute() {
+        return route("order_service_swagger")
+                .route(path("/aggregate/order-service/v3/api-docs"), http())
+                .before(uri("http://localhost:8081"))
+                .before(setPath("/api-docs"))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> inventoryServiceRoute() {
+        return route("inventory_service")
+                .route(path("/api/inventory/**"), http())
+                .before(uri("http://localhost:8082"))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> inventoryServiceSwaggerRoute() {
+        return route("inventory_service_swagger")
+                .route(path("/aggregate/inventory-service/v3/api-docs"), http())
+                .before(uri("http://localhost:8082"))
+                .before(setPath("/api-docs"))
+                .build();
     }
 }
