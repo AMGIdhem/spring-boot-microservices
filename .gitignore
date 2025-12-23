@@ -1,0 +1,23 @@
+# Maven/Gradle build
+**/target/
+**/build/
+**/*.iml
+**/volume-data
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.ipr
+
+# Eclipse/STS
+.project
+.classpath
+.settings/
+
+# VS Code
+.vscode/
+
+# Other
+*.log
+*.tmp
+
