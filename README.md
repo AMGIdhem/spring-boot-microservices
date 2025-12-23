@@ -45,3 +45,21 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 - Docker & Docker Compose  
 - Maven  
 - Java 25
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Java 25  
+- Maven 3.9+  
+- Docker (optional, for containerized deployment)  
+- IDE (IntelliJ, VSCode, Eclipse)
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/amgidhem/spring-boot-microservices.git
+cd spring-boot-microservices
+```
