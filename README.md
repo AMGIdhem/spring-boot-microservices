@@ -115,3 +115,23 @@ cd ../inventory-service
 cd ../api-gateway
 ./mvnw spring-boot:run
 ```
+
+### Using Docker Compose
+
+To run each service in Docker container:
+
+```bash
+# Product Service
+cd product-service
+docker-compose up -d --build
+
+# Order Service
+cd order-service
+docker-compose up -d --build
+
+# Inventory Service
+cd inventory-service
+docker-compose up -d --build
+```
+
+**Happy Coding! 🚀**
