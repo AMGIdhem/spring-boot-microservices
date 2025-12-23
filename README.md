@@ -39,10 +39,9 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 
 ## Technologies
 
-- Spring Boot 3.x / 4.x  
+- Spring Boot 4.0.1  
 - Spring Cloud Gateway (API Gateway)  
-- Spring Data JPA / MongoDB  
-- Spring Boot Actuator  
+- Spring Data JPA / MongoDB / MySQL  
 - Docker & Docker Compose  
 - Maven  
-- Java 17+
+- Java 25
