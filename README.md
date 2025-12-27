@@ -6,7 +6,7 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 * **order-service**: Handles orders and produces messages for notifications.
 * **inventory-service**: Tracks product inventory.
 * **notification-service**: Consumes order messages from Kafka and sends notifications (e.g., email).
-* **api-gateway**: Acts as the entry point for all client requests and routes them to appropriate services.
+* **api-gateway**: Acts as the entry point for all client requests, routes them to appropriate services, and secures routes using Keycloak and Spring Security.
 
 ---
 
@@ -19,15 +19,18 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 5. [API Gateway Routes](#api-gateway-routes)
 6. [Running the Services](#running-the-services)
 7. [Docker](#docker)
-8. [License](#license)
+8. [Security](#security)
+9. [License](#license)
 
 ---
 
 ## Architecture
 
-```text
+```
           +-----------------+
           |   API Gateway    |
+          |  (Keycloak +    |
+          |  Spring Security)|
           +--------+--------+
                    |
     +--------------+----------------+
@@ -44,10 +47,13 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
             +--------------+
 ```
 
+---
+
 ## Technologies
 
 * Spring Boot 4.0.1
 * Spring Cloud Gateway (API Gateway)
+* Spring Security + Keycloak (OAuth2 Client Credentials Grant)
 * Spring Data JPA / MongoDB / MySQL
 * Apache Kafka (async messaging between Order and Notification services)
 * Docker & Docker Compose
@@ -64,6 +70,7 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 * Maven 3.9+
 * Docker (optional, for containerized deployment)
 * Kafka broker (can be run via Docker Compose)
+* Keycloak (can be run via Docker Compose)
 * IDE (IntelliJ, VSCode, Eclipse)
 
 ### Clone the Repository
@@ -103,17 +110,93 @@ cd spring-boot-microservices
 
 * **Base URL:** `http://localhost:9000`
 * Routes requests to the respective services.
+* Secures routes using **Keycloak** and **Spring Security** with **Client Credentials grant**.
+* Services fetch an access token from Keycloak using their client ID and secret, then call the API Gateway with the token.
+* The API Gateway validates the access token against Keycloak before forwarding the request to the downstream service.
 
 ---
 
 ## API Gateway Routes
 
-| Route                  | Target Service       |
-| ---------------------- | -------------------- |
-| `/api/product/**`      | Product Service      |
-| `/api/order/**`        | Order Service        |
-| `/api/inventory/**`    | Inventory Service    |
-| `/api/notification/**` | Notification Service |
+| Route                  | Target Service       | Secured |
+| ---------------------- | -------------------- | ------- |
+| `/api/product/**`      | Product Service      | Yes     |
+| `/api/order/**`        | Order Service        | Yes     |
+| `/api/inventory/**`    | Inventory Service    | Yes     |
+| `/api/notification/**` | Notification Service | Yes     |
+
+---
+
+## Security
+
+The API Gateway uses **Spring Security** and **Keycloak** with **Client Credentials grant** for service-to-service communication:
+
+* Services authenticate with Keycloak using their **client ID and secret** to get a JWT access token.
+* The access token is sent in the `Authorization: Bearer <token>` header to the API Gateway.
+* The API Gateway verifies the token with Keycloak to ensure it is valid before routing requests to downstream services.
+* Roles and scopes in Keycloak can be used to control which services a client can access.
+
+**Example Keycloak Setup via Docker Compose:**
+
+```yaml
+version: '3.8'
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:21.1.1
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: start-dev
+    ports:
+      - 8085:8080
+```
+
+**Spring Security Configuration for API Gateway (Client Credentials Flow):**
+
+```java
+@Configuration
+public class SecurityConfig {
+
+    private final String[] freeResourceURLs = {"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
+            "/swagger-resources/**", "/api-docs/**", "/aggregate/**", "/actuator/prometheus"};
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
+        return httpSecurity.authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(freeResourceURLs).permitAll()
+                        .anyRequest().authenticated())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .build();
+    }
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.applyPermitDefaultValues();
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+```
+
+**Service Example (fetching token with Client Credentials grant):**
+
+```bash
+curl -X POST "http://localhost:8085/realms/myrealm/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=my-client" \
+  -d "client_secret=my-secret"
+```
+
+The response contains an access token that can be used to call the API Gateway:
+
+```bash
+curl -H "Authorization: Bearer <access_token>" http://localhost:9000/api/product
+```
 
 ---
 
@@ -138,34 +221,16 @@ cd ../inventory-service
 cd ../notification-service
 ./mvnw spring-boot:run
 
-# API Gateway
+# API Gateway (with Keycloak integration)
 cd ../api-gateway
 ./mvnw spring-boot:run
 ```
 
 ### Using Docker Compose
 
-To run each service in Docker container (including Kafka for async communication):
+To run each service in Docker container (including Kafka and Keycloak):
 
 ```bash
-# Product Service
-cd product-service
-docker-compose up -d --build
-
-# Order Service (Start Kafka and Zookeeper)
-cd ../order-service
-docker-compose up -d --build
-
-# Inventory Service
-cd ../inventory-service
-docker-compose up -d --build
-
-# Notification Service
-cd ../notification-service
-docker-compose up -d --build
-
-# API Gateway
-cd ../api-gateway
 docker-compose up -d --build
 ```
 
