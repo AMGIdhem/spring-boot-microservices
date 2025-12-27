@@ -6,7 +6,7 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 * **order-service**: Handles orders and produces messages for notifications.
 * **inventory-service**: Tracks product inventory.
 * **notification-service**: Consumes order messages from Kafka and sends notifications (e.g., email).
-* **api-gateway**: Acts as the entry point for all client requests, routes them to appropriate services, and secures routes using Keycloak and Spring Security.
+* **api-gateway**: Acts as the entry point for all client requests, routes them to appropriate services, secures routes using Keycloak and Spring Security, aggregates OpenAPI docs, and implements Resilience4J Circuit Breakers.
 
 ---
 
@@ -17,10 +17,12 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 3. [Getting Started](#getting-started)
 4. [Service Details](#service-details)
 5. [API Gateway Routes](#api-gateway-routes)
-6. [Running the Services](#running-the-services)
-7. [Docker](#docker)
-8. [Security](#security)
-9. [License](#license)
+6. [OpenAPI / Swagger Documentation](#openapi--swagger-documentation)
+7. [Resilience & Circuit Breaker](#resilience--circuit-breaker)
+8. [Running the Services](#running-the-services)
+9. [Docker](#docker)
+10. [Security](#security)
+11. [License](#license)
 
 ---
 
@@ -29,8 +31,9 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 ```
           +-----------------+
           |   API Gateway    |
-          |  (Keycloak +    |
-          |  Spring Security)|
+          | (Keycloak +      |
+          | Spring Security) |
+          | OpenAPI + CB     |
           +--------+--------+
                    |
     +--------------+----------------+
@@ -47,6 +50,8 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
             +--------------+
 ```
 
+CB = Circuit Breaker
+
 ---
 
 ## Technologies
@@ -56,6 +61,7 @@ This repository contains a sample **Spring Boot Microservices** architecture wit
 * Spring Security + Keycloak (OAuth2 Client Credentials Grant)
 * Spring Data JPA / MongoDB / MySQL
 * Apache Kafka (async messaging between Order and Notification services)
+* Resilience4J (Circuit Breaker)
 * Docker & Docker Compose
 * Maven
 * Java 25
@@ -92,8 +98,9 @@ cd spring-boot-microservices
 ### Order Service
 
 * **Base URL:** `http://localhost:8081/api/order`
-* Manages orders and order status.
-* Produces order messages to Kafka topic `order-events` for notifications.
+* Manages orders.
+* Produces order messages to Kafka topic `order-placed` for notifications.
+* Calls Inventory Service with **Resilience4J Circuit Breaker** to ensure stability.
 
 ### Inventory Service
 
@@ -111,8 +118,8 @@ cd spring-boot-microservices
 * **Base URL:** `http://localhost:9000`
 * Routes requests to the respective services.
 * Secures routes using **Keycloak** and **Spring Security** with **Client Credentials grant**.
-* Services fetch an access token from Keycloak using their client ID and secret, then call the API Gateway with the token.
-* The API Gateway validates the access token against Keycloak before forwarding the request to the downstream service.
+* Aggregates OpenAPI documentation for all microservices.
+* Implements **Resilience4J Circuit Breakers** for service calls.
 
 ---
 
@@ -127,76 +134,115 @@ cd spring-boot-microservices
 
 ---
 
-## Security
+## OpenAPI / Swagger Documentation
 
-The API Gateway uses **Spring Security** and **Keycloak** with **Client Credentials grant** for service-to-service communication:
+The API Gateway aggregates Swagger/OpenAPI documentation from all downstream microservices.
 
-* Services authenticate with Keycloak using their **client ID and secret** to get a JWT access token.
-* The access token is sent in the `Authorization: Bearer <token>` header to the API Gateway.
-* The API Gateway verifies the token with Keycloak to ensure it is valid before routing requests to downstream services.
-* Roles and scopes in Keycloak can be used to control which services a client can access.
+### Dependencies (API Gateway `pom.xml`)
 
-**Example Keycloak Setup via Docker Compose:**
-
-```yaml
-version: '3.8'
-services:
-  keycloak:
-    image: quay.io/keycloak/keycloak:21.1.1
-    environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-    command: start-dev
-    ports:
-      - 8085:8080
+```xml
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+    <version>2.2.0</version>
+</dependency>
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-gateway-webflux-ui</artifactId>
+    <version>1.6.13</version>
+</dependency>
 ```
 
-**Spring Security Configuration for API Gateway (Client Credentials Flow):**
+### Configuration (API Gateway `application.properties`)
+
+```
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.api-docs.path=/api-docs
+springdoc.swagger-ui.urls[0].name=Product Service
+springdoc.swagger-ui.urls[0].url=/aggregate/product-service/v3/api-docs
+springdoc.swagger-ui.urls[1].name=Order Service
+springdoc.swagger-ui.urls[1].url=/aggregate/order-service/v3/api-docs
+springdoc.swagger-ui.urls[2].name=Inventory Service
+springdoc.swagger-ui.urls[2].url=/aggregate/inventory-service/v3/api-docs
+```
+
+### Access Swagger UI
+
+```
+http://localhost:9000/swagger-ui/index.html
+```
+
+All microservices’ endpoints are available in one aggregated UI.
+
+---
+
+## Resilience & Circuit Breaker
+
+### Dependencies (API Gateway & Order Service `pom.xml`)
+
+```xml
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-spring-boot3</artifactId>
+    <version>2.0.2</version>
+</dependency>
+```
+
+### Example: API Gateway Circuit Breaker
+
+```yaml
+#Resilinece4j Properties
+resilience4j.circuitbreaker.configs.default.registerHealthIndicator=true
+resilience4j.circuitbreaker.configs.default.slidingWindowType=COUNT_BASED
+resilience4j.circuitbreaker.configs.default.slidingWindowSize=10
+resilience4j.circuitbreaker.configs.default.failureRateThreshold=50
+resilience4j.circuitbreaker.configs.default.waitDurationInOpenState=5s
+resilience4j.circuitbreaker.configs.default.permittedNumberOfCallsInHalfOpenState=3
+resilience4j.circuitbreaker.configs.default.automaticTransitionFromOpenToHalfOpenEnabled=true
+resilience4j.circuitbreaker.configs.default.minimum-number-of-calls=5
+
+# Resilience4j Timeout Properties
+resilience4j.timelimiter.configs.default.timeout-duration=3s
+```
 
 ```java
-@Configuration
-public class SecurityConfig {
-
-    private final String[] freeResourceURLs = {"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
-            "/swagger-resources/**", "/api-docs/**", "/aggregate/**", "/actuator/prometheus"};
-
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
-        return httpSecurity.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(freeResourceURLs).permitAll()
-                        .anyRequest().authenticated())
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+    public RouterFunction<ServerResponse> productServiceRoute() {
+        return route("product_service")
+                .route(path("/api/product/**"), http())
+                .before(uri("http://localhost:8080"))
+                .filter(circuitBreaker("productServiceCircuitBreaker",
+                        URI.create("forward:/fallbackRoute")))
                 .build();
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.applyPermitDefaultValues();
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+    public RouterFunction<ServerResponse> fallbackRoute() {
+        return route("fallbackRoute")
+                .GET("/fallbackRoute", request -> ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE).body("Service Unavailable, please try again later"))
+                .build();
     }
-}
 ```
 
-**Service Example (fetching token with Client Credentials grant):**
+### Example: Order Service → Inventory Service Circuit Breaker
 
-```bash
-curl -X POST "http://localhost:8085/realms/myrealm/protocol/openid-connect/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=my-client" \
-  -d "client_secret=my-secret"
+```java
+    @GetExchange("/api/inventory")
+    @CircuitBreaker(name = "inventory", fallbackMethod = "fallbackMethod")
+    @Retry(name = "inventory")
+    boolean isInStock(@RequestParam String skuCode, @RequestParam Integer quantity);
+
+    default boolean fallbackMethod(String code, Integer quantity, Throwable throwable) {
+        log.info("Cannot get inventory for skuCode {}, failure reason: {}", code, throwable.getMessage());
+        return false;
+    }
 ```
 
-The response contains an access token that can be used to call the API Gateway:
+---
 
-```bash
-curl -H "Authorization: Bearer <access_token>" http://localhost:9000/api/product
-```
+## Security
+
+Services authenticate with Keycloak using **client ID and secret** and send an **access token** to API Gateway. API Gateway verifies the token before forwarding requests.
 
 ---
 
@@ -221,17 +267,17 @@ cd ../inventory-service
 cd ../notification-service
 ./mvnw spring-boot:run
 
-# API Gateway (with Keycloak integration)
+# API Gateway
 cd ../api-gateway
 ./mvnw spring-boot:run
 ```
 
 ### Using Docker Compose
 
-To run each service in Docker container (including Kafka and Keycloak):
-
 ```bash
 docker-compose up -d --build
 ```
+
+---
 
 **Happy Coding! 🚀**
