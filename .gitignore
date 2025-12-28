@@ -3,6 +3,7 @@
 **/build/
 **/*.iml
 **/volume-data
+/docker/tempo/tempo-data/
 
 # IntelliJ IDEA
 .idea/
