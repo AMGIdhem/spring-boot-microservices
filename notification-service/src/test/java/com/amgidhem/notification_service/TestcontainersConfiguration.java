@@ -1,4 +1,4 @@
-package com.amgidhem.microservices.notification_service;
+package com.amgidhem.notification_service;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
